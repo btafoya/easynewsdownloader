@@ -1,8 +1,15 @@
 # easynewsdownloader/easynews
 
+[![PHP](https://img.shields.io/badge/PHP-%3E%3D8.0-777BB4?logo=php&logoColor=white)](https://php.net/)
+[![Latest Stable Version](https://img.shields.io/packagist/v/easynewsdownloader/easynews.svg)](https://packagist.org/packages/easynewsdownloader/easynews)
+[![PHPUnit](https://img.shields.io/badge/PHPUnit-9-assertive.svg)](https://phpunit.de/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 PHP library for the EasyNews search and NZB download service.
 
 This library provides a PSR-4, PHP 8.0+ wrapper around the EasyNews members API for searching Usenet video releases and downloading NZB files.
+
+Source repository: https://github.com/btafoya/easynewsdownloader
 
 ## Requirements
 
@@ -247,3 +254,7 @@ $seconds = EasynewsUtils::parseDurationSeconds('1h30m'); // 5400
 - Strict mode performs title, year, season, and episode validation against parsed release metadata.
 - The `downloadUrl` field assumes a downstream endpoint that accepts `easynewsPayload` and calls `downloadEasynewsNzb()`.
 - The `directUrl` field is the raw EasyNews video URL and can be used directly with `downloadVideoFile()`.
+
+## License
+
+This project is released under the MIT License.
