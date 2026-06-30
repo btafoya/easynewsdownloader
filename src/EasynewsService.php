@@ -27,8 +27,14 @@ class EasynewsService
     /** @var int Timeout for NZB download requests in milliseconds. */
     public const EASYNEWS_NZB_DOWNLOAD_TIMEOUT_MS = 30000;
 
-    /** @var int Timeout for video file download requests in milliseconds. */
-    public const EASYNEWS_VIDEO_DOWNLOAD_TIMEOUT_MS = 300000;
+    /** @var int Default absolute timeout for video file download requests in milliseconds. Zero disables the absolute timeout. */
+    public const EASYNEWS_VIDEO_DOWNLOAD_TIMEOUT_MS = 0;
+
+    /** @var int Default low-speed detection window for video downloads in milliseconds. */
+    public const EASYNEWS_DOWNLOAD_LOW_SPEED_TIME_MS = 60000;
+
+    /** @var int Default low-speed detection threshold for video downloads in bytes per second. */
+    public const EASYNEWS_DOWNLOAD_LOW_SPEED_LIMIT_BPS = 10240;
 
     /** @var int Default minimum release size in megabytes. */
     public const DEFAULT_MIN_SIZE_MB = 100;
@@ -84,6 +90,15 @@ class EasynewsService
     /** @var bool When true, strict metadata matching is disabled. */
     private bool $safeTextMode = false;
 
+    /** @var int Absolute timeout for video downloads in milliseconds. Zero disables the absolute timeout. */
+    private int $videoDownloadTimeoutMs = self::EASYNEWS_VIDEO_DOWNLOAD_TIMEOUT_MS;
+
+    /** @var int Low-speed detection window for video downloads in milliseconds. */
+    private int $downloadLowSpeedTimeMs = self::EASYNEWS_DOWNLOAD_LOW_SPEED_TIME_MS;
+
+    /** @var int Low-speed detection threshold for video downloads in bytes per second. */
+    private int $downloadLowSpeedLimitBps = self::EASYNEWS_DOWNLOAD_LOW_SPEED_LIMIT_BPS;
+
     /** @var array<string,string>|null Optional environment/config override. */
     private ?array $env = null;
 
@@ -91,7 +106,7 @@ class EasynewsService
      * Create a new service instance.
      *
      * @param array<string,string>|null $env Environment values used for configuration. When null, $_ENV is used.
-     * @param array<string,string> $config Runtime configuration overrides such as addonBaseUrl and sharedSecret.
+     * @param array<string,mixed> $config Runtime configuration overrides such as addonBaseUrl, sharedSecret, videoDownloadTimeoutMs, downloadLowSpeedTimeMs, and downloadLowSpeedLimitBps.
      */
     public function __construct(?array $env = null, array $config = [])
     {
@@ -128,6 +143,40 @@ class EasynewsService
         $this->sharedSecret = (string)($config['sharedSecret'] ?? '');
         $textModeOnly = $env['EASYNEWS_TEXT_MODE_ONLY'] ?? false;
         $this->safeTextMode = EasynewsUtils::toBoolean($textModeOnly, false);
+
+        $this->videoDownloadTimeoutMs = $this->coerceIntConfig(
+            $config['videoDownloadTimeoutMs'] ?? null,
+            $env['EASYNEWS_VIDEO_DOWNLOAD_TIMEOUT_MS'] ?? null,
+            self::EASYNEWS_VIDEO_DOWNLOAD_TIMEOUT_MS,
+            0
+        );
+        $this->downloadLowSpeedTimeMs = $this->coerceIntConfig(
+            $config['downloadLowSpeedTimeMs'] ?? null,
+            $env['EASYNEWS_DOWNLOAD_LOW_SPEED_TIME_MS'] ?? null,
+            self::EASYNEWS_DOWNLOAD_LOW_SPEED_TIME_MS,
+            1000
+        );
+        $this->downloadLowSpeedLimitBps = $this->coerceIntConfig(
+            $config['downloadLowSpeedLimitBps'] ?? null,
+            $env['EASYNEWS_DOWNLOAD_LOW_SPEED_LIMIT_BPS'] ?? null,
+            self::EASYNEWS_DOWNLOAD_LOW_SPEED_LIMIT_BPS,
+            1
+        );
+    }
+
+    /**
+     * Coerce a configuration value with config precedence over environment.
+     *
+     * @param mixed $configValue Explicit config value, if any.
+     * @param mixed $envValue Environment value, if any.
+     * @param int $default Default when neither is provided.
+     * @param int $minimum Smallest permitted value.
+     */
+    private function coerceIntConfig(mixed $configValue, mixed $envValue, int $default, int $minimum): int
+    {
+        $raw = $configValue ?? $envValue ?? $default;
+        $value = is_numeric($raw) ? (int)$raw : $default;
+        return max($minimum, $value);
     }
 
     /**
@@ -1395,8 +1444,14 @@ class EasynewsService
 
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, false);
         curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
-        curl_setopt($ch, CURLOPT_TIMEOUT_MS, self::EASYNEWS_VIDEO_DOWNLOAD_TIMEOUT_MS);
-        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT_MS, min(self::EASYNEWS_VIDEO_DOWNLOAD_TIMEOUT_MS, 5000));
+        if ($this->videoDownloadTimeoutMs > 0) {
+            curl_setopt($ch, CURLOPT_TIMEOUT_MS, $this->videoDownloadTimeoutMs);
+            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT_MS, min($this->videoDownloadTimeoutMs, 5000));
+        } else {
+            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT_MS, 5000);
+        }
+        curl_setopt($ch, CURLOPT_LOW_SPEED_TIME, (int)ceil($this->downloadLowSpeedTimeMs / 1000));
+        curl_setopt($ch, CURLOPT_LOW_SPEED_LIMIT, $this->downloadLowSpeedLimitBps);
         curl_setopt($ch, CURLOPT_USERAGENT, 'UsenetStreamer-Easynews/1.0');
         curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
         curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);

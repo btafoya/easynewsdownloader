@@ -328,4 +328,109 @@ final class EasynewsServiceTest extends TestCase
         $this->expectExceptionMessage('Easynews integration is disabled');
         $service->downloadVideoFile(['directUrl' => 'http://example.com/file.mp4'], sys_get_temp_dir() . '/should_not_be_created.mp4');
     }
+
+    public function testDefaultVideoDownloadTimeouts(): void
+    {
+        $service = $this->createService();
+        $reflection = new ReflectionClass($service);
+
+        $this->assertSame(0, $this->getPrivateInt($reflection, $service, 'videoDownloadTimeoutMs'));
+        $this->assertSame(60000, $this->getPrivateInt($reflection, $service, 'downloadLowSpeedTimeMs'));
+        $this->assertSame(10240, $this->getPrivateInt($reflection, $service, 'downloadLowSpeedLimitBps'));
+    }
+
+    public function testVideoDownloadTimeoutsCanBeOverriddenByEnv(): void
+    {
+        $service = new EasynewsService([
+            'EASYNEWS_ENABLED' => 'true',
+            'EASYNEWS_USERNAME' => 'testuser',
+            'EASYNEWS_PASSWORD' => 'testpass',
+            'EASYNEWS_VIDEO_DOWNLOAD_TIMEOUT_MS' => '120000',
+            'EASYNEWS_DOWNLOAD_LOW_SPEED_TIME_MS' => '30000',
+            'EASYNEWS_DOWNLOAD_LOW_SPEED_LIMIT_BPS' => '51200',
+        ]);
+        $reflection = new ReflectionClass($service);
+
+        $this->assertSame(120000, $this->getPrivateInt($reflection, $service, 'videoDownloadTimeoutMs'));
+        $this->assertSame(30000, $this->getPrivateInt($reflection, $service, 'downloadLowSpeedTimeMs'));
+        $this->assertSame(51200, $this->getPrivateInt($reflection, $service, 'downloadLowSpeedLimitBps'));
+    }
+
+    public function testVideoDownloadConfigOverridesEnv(): void
+    {
+        $service = new EasynewsService([
+            'EASYNEWS_ENABLED' => 'true',
+            'EASYNEWS_USERNAME' => 'testuser',
+            'EASYNEWS_PASSWORD' => 'testpass',
+            'EASYNEWS_VIDEO_DOWNLOAD_TIMEOUT_MS' => '120000',
+            'EASYNEWS_DOWNLOAD_LOW_SPEED_TIME_MS' => '30000',
+            'EASYNEWS_DOWNLOAD_LOW_SPEED_LIMIT_BPS' => '51200',
+        ], [
+            'videoDownloadTimeoutMs' => '240000',
+            'downloadLowSpeedTimeMs' => '10000',
+            'downloadLowSpeedLimitBps' => '20480',
+        ]);
+        $reflection = new ReflectionClass($service);
+
+        $this->assertSame(240000, $this->getPrivateInt($reflection, $service, 'videoDownloadTimeoutMs'));
+        $this->assertSame(10000, $this->getPrivateInt($reflection, $service, 'downloadLowSpeedTimeMs'));
+        $this->assertSame(20480, $this->getPrivateInt($reflection, $service, 'downloadLowSpeedLimitBps'));
+    }
+
+    public function testVideoDownloadInvalidTimeoutValuesFallBackToDefaults(): void
+    {
+        $service = new EasynewsService([
+            'EASYNEWS_ENABLED' => 'true',
+            'EASYNEWS_USERNAME' => 'testuser',
+            'EASYNEWS_PASSWORD' => 'testpass',
+            'EASYNEWS_VIDEO_DOWNLOAD_TIMEOUT_MS' => 'not-a-number',
+            'EASYNEWS_DOWNLOAD_LOW_SPEED_TIME_MS' => '-5000',
+            'EASYNEWS_DOWNLOAD_LOW_SPEED_LIMIT_BPS' => '0',
+        ]);
+        $reflection = new ReflectionClass($service);
+
+        $this->assertSame(0, $this->getPrivateInt($reflection, $service, 'videoDownloadTimeoutMs'));
+        $this->assertSame(1000, $this->getPrivateInt($reflection, $service, 'downloadLowSpeedTimeMs'));
+        $this->assertSame(1, $this->getPrivateInt($reflection, $service, 'downloadLowSpeedLimitBps'));
+    }
+
+    public function testDownloadVideoFileAbortsSlowTransfer(): void
+    {
+        $service = new EasynewsService([
+            'EASYNEWS_ENABLED' => 'true',
+            'EASYNEWS_USERNAME' => 'testuser',
+            'EASYNEWS_PASSWORD' => 'testpass',
+        ], [
+            // No absolute timeout, but kill if < 1 KB/s for more than 1 second.
+            'videoDownloadTimeoutMs' => 0,
+            'downloadLowSpeedTimeMs' => 1000,
+            'downloadLowSpeedLimitBps' => 1024,
+        ]);
+
+        $destination = sys_get_temp_dir() . '/easynews_slow_test_' . uniqid() . '/video.mp4';
+        $result = ['directUrl' => self::$mockServerUrl . '/slow/video.mp4'];
+
+        $start = microtime(true);
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Easynews video download failed');
+        try {
+            $service->downloadVideoFile($result, $destination);
+        } finally {
+            $elapsed = (int)((microtime(true) - $start) * 1000);
+            // Should abort well before the mock server's 3 second sleep.
+            $this->assertLessThan(2500, $elapsed, 'Slow transfer was not aborted quickly enough');
+            if (is_file($destination)) {
+                unlink($destination);
+            }
+        }
+    }
+
+    private function getPrivateInt(ReflectionClass $reflection, object $service, string $property): int
+    {
+        $prop = $reflection->getProperty($property);
+        $prop->setAccessible(true);
+        $value = $prop->getValue($service);
+        $this->assertIsInt($value);
+        return $value;
+    }
 }

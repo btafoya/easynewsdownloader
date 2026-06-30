@@ -37,6 +37,9 @@ The library reads configuration from environment variables by default. You may a
 | `EASYNEWS_MIN_SIZE_MB` | Minimum release size in MB | `100` |
 | `EASYNEWS_TEXT_MODE_ONLY` | Disable strict metadata matching | `false` |
 | `ADDON_BASE_URL` | Base URL used for generated download links | — |
+| `EASYNEWS_VIDEO_DOWNLOAD_TIMEOUT_MS` | Absolute cURL timeout for video downloads in milliseconds. `0` disables the absolute timeout. | `0` |
+| `EASYNEWS_DOWNLOAD_LOW_SPEED_TIME_MS` | Window for low-speed detection in milliseconds | `60000` |
+| `EASYNEWS_DOWNLOAD_LOW_SPEED_LIMIT_BPS` | Minimum acceptable transfer speed in bytes per second during the low-speed window | `10240` |
 
 You can also pass a shared array of values as the first argument to the constructor:
 
@@ -57,6 +60,9 @@ The second constructor argument is an optional runtime config array:
 |-----|-------------|
 | `addonBaseUrl` | Override `ADDON_BASE_URL` |
 | `sharedSecret` | Secret segment added to generated download URLs |
+| `videoDownloadTimeoutMs` | Override `EASYNEWS_VIDEO_DOWNLOAD_TIMEOUT_MS` |
+| `downloadLowSpeedTimeMs` | Override `EASYNEWS_DOWNLOAD_LOW_SPEED_TIME_MS` |
+| `downloadLowSpeedLimitBps` | Override `EASYNEWS_DOWNLOAD_LOW_SPEED_LIMIT_BPS` |
 
 ## Quick start
 
@@ -208,6 +214,8 @@ Behavior:
 - Sends an HTTP `Range` request when the destination already exists so partial downloads resume.
 - Auto-creates the destination directory tree.
 - Returns `true` on success, throws `RuntimeException` on errors.
+- By default there is **no absolute timeout** for video transfers, so large or slow downloads are allowed to run to completion as long as data keeps moving.
+- Stalled transfers are aborted using cURL low-speed detection: if the average speed drops below `EASYNEWS_DOWNLOAD_LOW_SPEED_LIMIT_BPS` for `EASYNEWS_DOWNLOAD_LOW_SPEED_TIME_MS`, cURL kills the connection. Defaults are 10 KB/s over a 60-second window.
 
 ## Helper scripts
 
