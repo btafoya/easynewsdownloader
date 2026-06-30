@@ -7,7 +7,7 @@
 
 PHP library for the EasyNews search and NZB download service.
 
-This library provides a PSR-4, PHP 8.0+ wrapper around the EasyNews members API for searching Usenet video releases and downloading NZB files.
+This library provides a PSR-4, PHP 8.0+ wrapper around the EasyNews members API for searching Usenet video releases and downloading NZB and video files.
 
 Source repository: https://github.com/btafoya/easynewsdownloader
 
