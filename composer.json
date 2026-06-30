@@ -1,0 +1,24 @@
+{
+    "name": "easynewsdownloader/easynews",
+    "description": "PHP port of the EasyNews service and query builder.",
+    "type": "library",
+    "license": "MIT",
+    "require": {
+        "php": ">=8.0",
+        "ext-curl": "*",
+        "ext-intl": "*"
+    },
+    "autoload": {
+        "psr-4": {
+            "EasyNewsDownloader\\EasyNews\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "EasyNewsDownloader\\EasyNews\\Tests\\": "tests/"
+        }
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^9.0"
+    }
+}
